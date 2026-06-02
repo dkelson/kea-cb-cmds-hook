@@ -1,0 +1,13 @@
+% CB_CMDS_DEINIT_OK unloading Configuration Backend Commands hooks library
+This informational message is logged when the cb_cmds hooks library is
+unloaded.
+
+% CB_CMDS_HANDLER_FAILED Configuration Backend command handler failed: %1
+This error is logged when a command callout failed before it could create a
+normal control-channel response.
+
+% CB_CMDS_INIT_FAILED loading Configuration Backend Commands hooks library failed: %1
+This error is logged when the cb_cmds hooks library cannot be initialized.
+
+% CB_CMDS_INIT_OK loaded Configuration Backend Commands hooks library
+This informational message is logged when the cb_cmds hooks library is loaded.

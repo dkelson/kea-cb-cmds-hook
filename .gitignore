@@ -1,0 +1,15 @@
+build/
+build-*/
+rpmbuild/
+.DS_Store
+*.o
+*.a
+*.so
+*.dylib
+*.rpm
+*.src.rpm
+*.log
+__pycache__/
+*.pyc
+/.idea/
+/.vscode/

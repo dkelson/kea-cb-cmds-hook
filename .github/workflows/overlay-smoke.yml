@@ -1,0 +1,195 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      kea_repository:
+        description: Kea repository to test against
+        required: true
+        default: isc-projects/kea
+      kea_ref:
+        description: Kea branch, tag, or commit to test against
+        required: true
+        default: 1f5fdcac1a3d73078bff24a7d4b46520b580f60f
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out hook
+        uses: actions/checkout@v6
+
+      - name: Check overlay scripts
+        run: |
+          sh -n scripts/apply-overlay.sh
+          sh -n scripts/build-rpm.sh
+          sh -n scripts/build-rpm-almalinux.sh
+          sh -n scripts/run-tests.sh
+
+      - name: Check API coverage script syntax
+        run: |
+          python3 -m py_compile src/hooks/dhcp/cb_cmds/tests/api_coverage.py
+
+  kea-overlay:
+    runs-on: ubuntu-latest
+    env:
+      KEA_REPOSITORY: ${{ inputs.kea_repository || 'isc-projects/kea' }}
+      KEA_REF: ${{ inputs.kea_ref || '1f5fdcac1a3d73078bff24a7d4b46520b580f60f' }}
+      CC: clang
+      CXX: clang++
+    steps:
+      - name: Check out hook
+        uses: actions/checkout@v6
+        with:
+          path: hook
+
+      - name: Check out Kea
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.KEA_REPOSITORY }}
+          ref: ${{ env.KEA_REF }}
+          path: kea
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            bison \
+            build-essential \
+            clang \
+            flex \
+            gawk \
+            libboost-all-dev \
+            libgtest-dev \
+            libkrb5-dev \
+            liblog4cplus-dev \
+            libssl-dev \
+            ninja-build \
+            pkg-config \
+            python3-venv
+
+      - name: Install Meson
+        run: |
+          python3 -m venv .ci-meson
+          .ci-meson/bin/python -m pip install --upgrade pip
+          .ci-meson/bin/python -m pip install meson==1.11.1
+          echo "$PWD/.ci-meson/bin" >> "$GITHUB_PATH"
+          .ci-meson/bin/meson --version
+
+      - name: Apply hook overlay
+        env:
+          KEA_CB_CMDS_SKIP_DOCS: "1"
+        run: |
+          hook/scripts/apply-overlay.sh kea
+
+      - name: Configure Kea
+        timeout-minutes: 10
+        run: |
+          meson setup kea/build kea \
+            --wrap-mode=nofallback \
+            -Dtests=enabled \
+            -Dcpp_std=c++17 \
+            -Dcrypto=openssl \
+            -Dkrb5=disabled \
+            -Dmysql=disabled \
+            -Dnetconf=disabled \
+            -Dpostgresql=disabled
+
+      - name: Build cb_cmds tests
+        timeout-minutes: 20
+        run: |
+          meson compile -C kea/build \
+            dhcp-cb-cmds-tests \
+            dhcp-cb-cmds-libload-tests
+
+      - name: Run cb_cmds tests
+        timeout-minutes: 10
+        run: |
+          meson test -C kea/build \
+            dhcp-cb-cmds-tests \
+            dhcp-cb-cmds-libload-tests \
+            dhcp-cb-cmds-api-coverage \
+            kea-config-backend-tests \
+            --print-errorlogs
+
+  kea-overlay-sanitizer:
+    runs-on: ubuntu-latest
+    env:
+      KEA_REPOSITORY: ${{ inputs.kea_repository || 'isc-projects/kea' }}
+      KEA_REF: ${{ inputs.kea_ref || '1f5fdcac1a3d73078bff24a7d4b46520b580f60f' }}
+      ASAN_SYMBOLIZER_PATH: /usr/bin/llvm-symbolizer
+      CC: clang
+      CXX: clang++
+    steps:
+      - name: Check out hook
+        uses: actions/checkout@v6
+        with:
+          path: hook
+
+      - name: Check out Kea
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.KEA_REPOSITORY }}
+          ref: ${{ env.KEA_REF }}
+          path: kea
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            bison \
+            build-essential \
+            clang \
+            flex \
+            gawk \
+            libboost-all-dev \
+            libgtest-dev \
+            libkrb5-dev \
+            liblog4cplus-dev \
+            libssl-dev \
+            llvm \
+            ninja-build \
+            pkg-config \
+            python3-venv
+
+      - name: Install Meson
+        run: |
+          python3 -m venv .ci-meson
+          .ci-meson/bin/python -m pip install --upgrade pip
+          .ci-meson/bin/python -m pip install meson==1.11.1
+          echo "$PWD/.ci-meson/bin" >> "$GITHUB_PATH"
+          .ci-meson/bin/meson --version
+
+      - name: Apply hook overlay
+        env:
+          KEA_CB_CMDS_SKIP_DOCS: "1"
+        run: |
+          hook/scripts/apply-overlay.sh kea
+
+      - name: Configure Kea sanitizer build
+        timeout-minutes: 10
+        run: |
+          meson setup kea/build-asan kea \
+            --wrap-mode=nofallback \
+            -Dtests=enabled \
+            -Dcpp_std=c++17 \
+            -Db_sanitize=address,undefined \
+            -Dcrypto=openssl \
+            -Dkrb5=disabled \
+            -Dmysql=disabled \
+            -Dnetconf=disabled \
+            -Dpostgresql=disabled
+
+      - name: Build cb_cmds sanitizer tests
+        timeout-minutes: 25
+        run: |
+          meson compile -C kea/build-asan \
+            dhcp-cb-cmds-tests \
+            dhcp-cb-cmds-libload-tests
+
+      - name: Run cb_cmds sanitizer tests
+        timeout-minutes: 10
+        run: |
+          hook/scripts/run-tests.sh --leak-check kea/build-asan

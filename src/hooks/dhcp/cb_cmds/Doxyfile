@@ -1,0 +1,2 @@
+PROJECT_NAME = "cb_cmds"
+INPUT = cb_cmds.dox cb_cmds.h cb_cmds.cc cb_cmds_callouts.cc

@@ -1,0 +1,6 @@
+/**
+ * @defgroup cb_cmds Configuration Backend Commands hooks library
+ *
+ * This hooks library implements control-channel commands for managing DHCP
+ * configuration backend contents.
+ */

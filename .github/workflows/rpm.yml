@@ -1,0 +1,109 @@
+name: rpm
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      cloudsmith_repo:
+        description: ISC Cloudsmith Kea repository name
+        required: true
+        default: kea-3-0
+
+jobs:
+  rpm:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: distro-x86_64
+            kea_package_source: distro
+            cpu_baseline: x86_64
+          - name: distro-x86_64_v2
+            kea_package_source: distro
+            cpu_baseline: x86_64_v2
+          - name: isc-x86_64
+            kea_package_source: isc
+            cpu_baseline: x86_64
+          - name: isc-x86_64_v2
+            kea_package_source: isc
+            cpu_baseline: x86_64_v2
+    env:
+      ISC_KEA_REPO: ${{ inputs.cloudsmith_repo || 'kea-3-0' }}
+      CONTAINER_ENGINE: docker
+      ALMALINUX_IMAGE: quay.io/almalinuxorg/almalinux:10
+      CONTAINER_PLATFORM: linux/amd64
+      KEA_PACKAGE_SOURCE: ${{ matrix.kea_package_source }}
+      CPU_BASELINE: ${{ matrix.cpu_baseline }}
+    steps:
+      - name: Check out hook
+        uses: actions/checkout@v6
+
+      - name: Build RPM in AlmaLinux 10 (${{ matrix.name }})
+        run: |
+          ./scripts/build-rpm-almalinux.sh
+
+      - name: Collect RPM artifacts
+        run: |
+          set -euo pipefail
+          artifact_dir="dist/${{ matrix.name }}"
+          mkdir -p "$artifact_dir"
+          mapfile -t rpm_files < <(find rpmbuild/RPMS rpmbuild/SRPMS -type f -name '*.rpm' | sort)
+          if [ "${#rpm_files[@]}" -eq 0 ]; then
+            echo "No RPM artifacts were produced" >&2
+            exit 1
+          fi
+          for rpm in "${rpm_files[@]}"; do
+            cp -v "$rpm" "$artifact_dir/$(basename "$rpm")"
+          done
+
+      - name: Upload RPM artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: rpms-${{ matrix.name }}
+          path: dist/${{ matrix.name }}/*.rpm
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: rpm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download RPM artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: rpms-*
+          path: dist
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mapfile -t assets < <(find dist -type f -name '*.rpm' | sort)
+          if [ "${#assets[@]}" -eq 0 ]; then
+            echo "No RPM assets found" >&2
+            exit 1
+          fi
+
+          notes_file=$(mktemp)
+          {
+            echo "RPM builds for $GITHUB_REF_NAME."
+            echo
+            echo "Assets:"
+            printf -- '- %s\n' "${assets[@]##*/}"
+          } > "$notes_file"
+
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
+              --title "$GITHUB_REF_NAME" \
+              --notes-file "$notes_file" \
+              --verify-tag
+          fi

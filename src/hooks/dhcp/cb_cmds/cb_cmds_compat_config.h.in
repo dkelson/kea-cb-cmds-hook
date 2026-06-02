@@ -1,0 +1,4 @@
+#pragma once
+
+#mesondefine CB_CMDS_HAVE_KEA_OPTION_CLIENT_CLASSES
+#mesondefine CB_CMDS_HAVE_KEA_OPTION_DEF_DELETE_FORCE

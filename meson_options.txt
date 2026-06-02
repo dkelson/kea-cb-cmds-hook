@@ -1,0 +1,18 @@
+option(
+    'hooksdir',
+    type: 'string',
+    value: '',
+    description: 'Directory where Kea hook libraries are installed. Defaults to the kea.pc libdir plus /kea/hooks.',
+)
+option(
+    'kea_include_dir',
+    type: 'string',
+    value: '/usr/include/kea',
+    description: 'Installed Kea include directory to use when kea.pc is unavailable.',
+)
+option(
+    'kea_lib_dir',
+    type: 'string',
+    value: '/usr/lib64',
+    description: 'Installed Kea library directory to use when kea.pc is unavailable.',
+)
