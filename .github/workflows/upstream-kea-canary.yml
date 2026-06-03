@@ -2,7 +2,7 @@ name: upstream-kea-canary
 
 on:
   schedule:
-    - cron: '17 9 * * *'
+    - cron: '17 9 * * 3'
   workflow_dispatch:
     inputs:
       kea_repository:
