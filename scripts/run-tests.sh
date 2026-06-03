@@ -53,3 +53,7 @@ if [ "${KEA_CB_CMDS_DB_TESTS:-0}" = "1" ]; then
     KEA_CB_CMDS_DB_TESTS=1 KEA_TEST_DB_WIPE_DATA_ONLY="${KEA_TEST_DB_WIPE_DATA_ONLY:-false}" \
         meson test -C "$BUILD_DIR" dhcp-cb-cmds-db-tests --print-errorlogs
 fi
+
+if [ "${KEA_CB_CMDS_ARM_CONFORMANCE:-0}" = "1" ] || [ -n "${CB_PG_PASSWORD:-}" ]; then
+    python3 "$(dirname "$0")/arm_conformance.py"
+fi
