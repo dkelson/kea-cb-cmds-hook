@@ -14,8 +14,46 @@ on:
         required: true
         default: master
 
+permissions:
+  contents: read
+  issues: write
+
 jobs:
+  should-run:
+    runs-on: ubuntu-latest
+    outputs:
+      run_canary: ${{ steps.guard.outputs.run_canary }}
+    steps:
+      - name: Skip scheduled canary while failure issue is open
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CANARY_ISSUE_LABEL: upstream-kea-canary
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" != "schedule" ]; then
+            echo "run_canary=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          open_issue_count=$(
+            gh issue list \
+              --state open \
+              --label "$CANARY_ISSUE_LABEL" \
+              --json number \
+              --jq 'length'
+          )
+          if [ "$open_issue_count" -gt 0 ]; then
+            echo "Open $CANARY_ISSUE_LABEL issue exists; skipping scheduled canary."
+            echo "run_canary=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_canary=true" >> "$GITHUB_OUTPUT"
+          fi
+
   canary:
+    needs: should-run
+    if: needs.should-run.outputs.run_canary == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -144,3 +182,53 @@ jobs:
           ln -s "$PWD/kea/build-canary/src/hooks/dhcp/pgsql/libdhcp_pgsql.so" \
             "$PWD/kea/build-canary/src/hooks/dhcp/cb_cmds/libdhcp_pgsql.so"
           python3 hook/scripts/arm_conformance.py
+
+  report-failure:
+    needs:
+      - should-run
+      - canary
+    if: needs.should-run.outputs.run_canary == 'true' && needs.canary.result == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open or update upstream canary issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CANARY_ISSUE_LABEL: upstream-kea-canary
+          KEA_REPOSITORY: ${{ inputs.kea_repository || 'isc-projects/kea' }}
+          KEA_REF: ${{ inputs.kea_ref || 'master' }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          gh label create "$CANARY_ISSUE_LABEL" \
+            --description "Upstream Kea canary failures" \
+            --color D73A4A >/dev/null 2>&1 || true
+
+          issue_body=$(mktemp)
+          {
+            echo "The upstream Kea canary failed."
+            echo
+            echo "- Workflow run: $RUN_URL"
+            echo "- Kea repository: $KEA_REPOSITORY"
+            echo "- Kea ref: $KEA_REF"
+            echo "- Hook ref: $GITHUB_SHA"
+            echo
+            echo "Scheduled canary runs will skip while this issue remains open."
+            echo "Close this issue after the hook has been updated or the upstream breakage is resolved."
+          } > "$issue_body"
+
+          existing_issue=$(
+            gh issue list \
+              --state open \
+              --label "$CANARY_ISSUE_LABEL" \
+              --json number \
+              --jq '.[0].number // empty'
+          )
+          if [ -n "$existing_issue" ]; then
+            gh issue comment "$existing_issue" --body-file "$issue_body"
+          else
+            gh issue create \
+              --title "Upstream Kea canary failing" \
+              --label "$CANARY_ISSUE_LABEL" \
+              --body-file "$issue_body"
+          fi
