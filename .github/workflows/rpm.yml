@@ -40,6 +40,17 @@ jobs:
       - name: Check out hook
         uses: actions/checkout@v6
 
+      - name: Validate release version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          expected="${GITHUB_REF_NAME#v}"
+          actual="$(tr -d '[:space:]' < VERSION)"
+          if [ "$actual" != "$expected" ]; then
+            echo "VERSION ($actual) must match tag $GITHUB_REF_NAME ($expected)" >&2
+            exit 1
+          fi
+
       - name: Build RPM in AlmaLinux 10 (${{ matrix.name }})
         run: |
           ./scripts/build-rpm-almalinux.sh

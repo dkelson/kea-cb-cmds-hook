@@ -1,7 +1,8 @@
 %{!?cb_cmds_package_name:%global cb_cmds_package_name isc-kea-hooks-cb-cmds}
+%{!?cb_cmds_version:%global cb_cmds_version 0.2.0}
 
 Name:           %{cb_cmds_package_name}
-Version:        0.1.0
+Version:        %{cb_cmds_version}
 Release:        1%{?cb_cmds_release_suffix}%{?dist}
 Summary:        Configuration Backend Commands hook for Kea
 
@@ -55,5 +56,8 @@ test -f %{buildroot}%{_libdir}/kea/hooks/libdhcp_cb_cmds.so
 %{_libdir}/kea/hooks/libdhcp_cb_cmds.so
 
 %changelog
+* Tue Jun 02 2026 Dax Kelson <daxkelson@gmail.com> - 0.2.0-1
+- Add ARM conformance harness and packaging release fixes.
+
 * Tue Jun 02 2026 Dax Kelson <daxkelson@gmail.com> - 0.1.0-1
 - Initial RPM packaging for the cb_cmds hook.

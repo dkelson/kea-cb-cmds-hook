@@ -24,7 +24,41 @@ case "$KEA_PACKAGE_SOURCE" in
         ;;
 esac
 
-VERSION=${VERSION:-$(awk '/^Version:/ { print $2; exit }' "$SPEC_FILE")}
+default_version() {
+    if [ -f "$REPO_DIR/VERSION" ]; then
+        tr -d '[:space:]' < "$REPO_DIR/VERSION"
+        return
+    fi
+
+    awk '
+        /^%{!\?cb_cmds_version:/ {
+            gsub(/[}]/, "")
+            print $NF
+            exit
+        }
+        /^Version:/ {
+            print $2
+            exit
+        }
+    ' "$SPEC_FILE"
+}
+
+if [ -z "${VERSION:-}" ]; then
+    TAG=
+    if git -C "$REPO_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        TAG=$(git -C "$REPO_DIR" describe --exact-match --tags HEAD 2>/dev/null || true)
+    fi
+
+    case "$TAG" in
+        v[0-9]*)
+            VERSION=${TAG#v}
+            ;;
+        *)
+            VERSION=$(default_version)
+            ;;
+    esac
+fi
+
 TOPDIR=${RPM_TOPDIR:-"$REPO_DIR/rpmbuild"}
 ARCHIVE="$TOPDIR/SOURCES/$NAME-$VERSION.tar.gz"
 CLEANUP_DIR=
@@ -83,6 +117,7 @@ if [ "${CPU_BASELINE:-x86_64}" = "x86_64_v2" ]; then
     rpmbuild -ba "$TOPDIR/SPECS/$(basename "$SPEC_FILE")" \
         --define "_topdir $TOPDIR" \
         --define "cb_cmds_package_name $NAME" \
+        --define "cb_cmds_version $VERSION" \
         --define "cb_cmds_x86_64_v2 1" \
         --define "cb_cmds_release_suffix .x86_64_v2" \
         "$@"
@@ -90,5 +125,6 @@ else
     rpmbuild -ba "$TOPDIR/SPECS/$(basename "$SPEC_FILE")" \
         --define "_topdir $TOPDIR" \
         --define "cb_cmds_package_name $NAME" \
+        --define "cb_cmds_version $VERSION" \
         "$@"
 fi
