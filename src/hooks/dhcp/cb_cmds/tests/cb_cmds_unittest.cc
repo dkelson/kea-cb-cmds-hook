@@ -232,20 +232,22 @@ TEST_F(CbCmdsTest, serverCommandsUseRemoteSelector) {
 
     args = expectSuccess(run("remote-server4-get",
                              "{ \"remote\": { \"host\": \"alpha\" }, "
-                             "\"server-tag\": \"alpha\" }"));
+                             "\"servers\": [ { \"server-tag\": \"alpha\" } ] }"));
     ASSERT_TRUE(args->get("servers")) << args->str();
     ASSERT_EQ(1u, args->get("servers")->size()) << args->str();
     EXPECT_EQ("alpha", args->get("servers")->get(0)->get("server-tag")->stringValue());
 
     args = expectSuccess(run("remote-server4-del",
                              "{ \"remote\": { \"host\": \"alpha\" }, "
-                             "\"server-tag\": \"alpha\" }"));
+                             "\"servers\": [ { \"server-tag\": \"alpha\" } ] }"));
     EXPECT_EQ(1, args->get("count")->intValue());
 }
 
 TEST_F(CbCmdsTest, serverCommandsRejectServerTagsAndValidateTagNames) {
     expectError(run("remote-server4-set", "{ \"server-tags\": [ \"alpha\" ], "
                     "\"servers\": [ { \"server-tag\": \"srv\" } ] }"));
+    expectError(run("remote-server4-get", "{ \"server-tag\": \"srv\" }"));
+    expectError(run("remote-server4-del", "{ \"server-tag\": \"srv\" }"));
     expectError(run("remote-server4-set", "{ \"servers\": [ { \"server-tag\": \"all\" } ] }"));
     expectError(run("remote-server4-set", "{ \"servers\": [ { \"server-tag\": \"any\" } ] }"));
 
@@ -383,8 +385,7 @@ TEST_F(CbCmdsTest, sharedNetworkCommandsRoundTrip) {
 TEST_F(CbCmdsTest, optionDefCommandsRoundTrip) {
     expectSuccess(run("remote-option-def4-set", withTags("\"option-defs\": [ { "
         "\"name\": \"foo\", \"code\": 224, \"space\": \"dhcp4\", "
-        "\"type\": \"string\", \"array\": false, \"record-types\": \"\", "
-        "\"encapsulate\": \"\" } ]")));
+        "\"type\": \"string\" } ]")));
 
     ConstElementPtr args = expectSuccess(run("remote-option-def4-get",
         withTags("\"option-defs\": [ { \"code\": 224, \"space\": \"dhcp4\" } ]")));
@@ -480,8 +481,10 @@ TEST_F(CbCmdsTest, classCommandsRoundTrip) {
 TEST_F(CbCmdsTest, v6SubnetNetworkClassAndOptionsHonorServerTags) {
     expectSuccess(run("remote-server6-set",
         "{ \"servers\": [ { \"server-tag\": \"alpha\", \"description\": \"v6\" } ] }"));
+    expectError(run("remote-server6-get", "{ \"server-tag\": \"alpha\" }"));
+    expectError(run("remote-server6-del", "{ \"server-tag\": \"alpha\" }"));
     ConstElementPtr args = expectSuccess(run("remote-server6-get",
-                                             "{ \"server-tag\": \"alpha\" }"));
+                                             "{ \"servers\": [ { \"server-tag\": \"alpha\" } ] }"));
     ASSERT_TRUE(args->get("servers")) << args->str();
     ASSERT_EQ(1u, args->get("servers")->size()) << args->str();
     EXPECT_EQ("alpha", args->get("servers")->get(0)->get("server-tag")->stringValue());
@@ -560,8 +563,7 @@ TEST_F(CbCmdsTest, v6SubnetNetworkClassAndOptionsHonorServerTags) {
 
     expectSuccess(run("remote-option-def6-set", withTags("\"option-defs\": [ { "
         "\"name\": \"v6foo\", \"code\": 100, \"space\": \"dhcp6\", "
-        "\"type\": \"string\", \"array\": false, \"record-types\": \"\", "
-        "\"encapsulate\": \"\" } ]")));
+        "\"type\": \"string\" } ]")));
     args = expectSuccess(run("remote-option-def6-get",
         withTags("\"option-defs\": [ { \"code\": 100, \"space\": \"dhcp6\" } ]")));
     ASSERT_EQ(1u, args->get("option-defs")->size()) << args->str();
@@ -615,7 +617,7 @@ TEST_F(CbCmdsTest, v6SubnetNetworkClassAndOptionsHonorServerTags) {
     EXPECT_EQ(1, expectSuccess(run("remote-global-parameter6-del",
         withTags("\"parameters\": [ \"preferred-lifetime\" ]")))->get("count")->intValue());
     EXPECT_EQ(1, expectSuccess(run("remote-server6-del",
-        "{ \"server-tag\": \"alpha\" }"))->get("count")->intValue());
+        "{ \"servers\": [ { \"server-tag\": \"alpha\" } ] }"))->get("count")->intValue());
 }
 
 TEST_F(CbCmdsTest, listCommandsSupportNullForUnassignedObjects) {
@@ -649,6 +651,13 @@ TEST_F(CbCmdsTest, validationErrorsCoverMalformedArguments) {
                     "\"shared-networks\": [ { \"name\": \"n\" } ], "
                     "\"options\": [ { \"code\": 15, \"space\": \"dhcp4\", "
                     "\"data\": \"example.com\" } ] }"));
+    ConstElementPtr response = run("remote-option4-subnet-set",
+        "{ \"subnets\": [ { \"id\": 999 } ], "
+        "\"options\": [ { \"name\": \"domain-name-servers\", \"data\": \"192.0.2.1\" } ] }");
+    expectError(response);
+    ASSERT_TRUE(response->get("text")) << response->str();
+    EXPECT_NE(string::npos, response->get("text")->stringValue().find("subnet id 999 not found"));
+    EXPECT_EQ(string::npos, response->get("text")->stringValue().find("INSERT_OPTION"));
     expectError(run("remote-subnet4-list", "{}"));
     expectError(run("remote-network4-list", "{}"));
     expectError(run("remote-global-parameter4-get-all",

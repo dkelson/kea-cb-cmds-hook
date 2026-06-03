@@ -290,8 +290,7 @@ TYPED_TEST(CbCmdsDbBackendTest, v4CommandsPersistThroughBackend) {
         "\"shared-network-name\": null } ]")));
     this->expectSuccess(this->run("remote-option-def4-set", tags("\"option-defs\": [ { "
         "\"name\": \"foo\", \"code\": 224, \"space\": \"dhcp4\", "
-        "\"type\": \"string\", \"array\": false, \"record-types\": \"\", "
-        "\"encapsulate\": \"\" } ]")));
+        "\"type\": \"string\" } ]")));
     this->expectSuccess(this->run("remote-option4-global-set", tags("\"options\": [ { "
         "\"name\": \"domain-name-servers\", \"code\": 6, \"space\": \"dhcp4\", "
         "\"data\": \"192.0.2.1\" } ]")));
@@ -300,7 +299,8 @@ TYPED_TEST(CbCmdsDbBackendTest, v4CommandsPersistThroughBackend) {
 
     this->reopenBackends();
 
-    this->expectSuccess(this->run("remote-server4-get", "{ \"server-tag\": \"alpha\" }"));
+    this->expectSuccess(this->run("remote-server4-get",
+        "{ \"servers\": [ { \"server-tag\": \"alpha\" } ] }"));
     this->expectSuccess(this->run("remote-server4-get-all", "{}"));
     this->expectSuccess(this->run("remote-global-parameter4-get",
         tags("\"parameters\": [ \"valid-lifetime\" ]")));
@@ -382,10 +382,11 @@ TYPED_TEST(CbCmdsDbBackendTest, v4CommandsPersistThroughBackend) {
     this->expectSuccess(this->run("remote-global-parameter4-del",
         tags("\"parameters\": [ \"valid-lifetime\" ]")));
     this->expectSuccess(this->run("remote-server4-del",
-        "{ \"server-tag\": \"alpha\" }"));
+        "{ \"servers\": [ { \"server-tag\": \"alpha\" } ] }"));
 
     this->reopenBackends();
-    this->expectEmpty(this->run("remote-server4-get", "{ \"server-tag\": \"alpha\" }"));
+    this->expectEmpty(this->run("remote-server4-get",
+        "{ \"servers\": [ { \"server-tag\": \"alpha\" } ] }"));
     this->expectEmpty(this->run("remote-global-parameter4-get",
         tags("\"parameters\": [ \"valid-lifetime\" ]")));
     this->expectEmpty(this->run("remote-subnet4-get-by-id",
@@ -412,8 +413,7 @@ TYPED_TEST(CbCmdsDbBackendTest, v6CommandsPersistThroughBackend) {
         "\"shared-network-name\": null } ]")));
     this->expectSuccess(this->run("remote-option-def6-set", tags("\"option-defs\": [ { "
         "\"name\": \"v6foo\", \"code\": 100, \"space\": \"dhcp6\", "
-        "\"type\": \"string\", \"array\": false, \"record-types\": \"\", "
-        "\"encapsulate\": \"\" } ]")));
+        "\"type\": \"string\" } ]")));
     this->expectSuccess(this->run("remote-option6-global-set", tags("\"options\": [ { "
         "\"name\": \"dns-servers\", \"code\": 23, \"space\": \"dhcp6\", "
         "\"data\": \"2001:db8::1\" } ]")));
@@ -422,7 +422,8 @@ TYPED_TEST(CbCmdsDbBackendTest, v6CommandsPersistThroughBackend) {
 
     this->reopenBackends();
 
-    this->expectSuccess(this->run("remote-server6-get", "{ \"server-tag\": \"alpha\" }"));
+    this->expectSuccess(this->run("remote-server6-get",
+        "{ \"servers\": [ { \"server-tag\": \"alpha\" } ] }"));
     this->expectSuccess(this->run("remote-server6-get-all", "{}"));
     this->expectSuccess(this->run("remote-global-parameter6-get",
         tags("\"parameters\": [ \"preferred-lifetime\" ]")));
@@ -508,7 +509,7 @@ TYPED_TEST(CbCmdsDbBackendTest, v6CommandsPersistThroughBackend) {
     this->expectSuccess(this->run("remote-global-parameter6-del",
         tags("\"parameters\": [ \"preferred-lifetime\" ]")));
     this->expectSuccess(this->run("remote-server6-del",
-        "{ \"server-tag\": \"alpha\" }"));
+        "{ \"servers\": [ { \"server-tag\": \"alpha\" } ] }"));
 }
 
 } // end of anonymous namespace

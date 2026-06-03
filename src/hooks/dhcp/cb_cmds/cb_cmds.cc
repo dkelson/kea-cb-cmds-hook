@@ -222,6 +222,11 @@ singleListItemAny(const ConstElementPtr& args, const vector<string>& list_names)
     isc_throw(BadValue, "missing required list argument");
 }
 
+ConstElementPtr
+serverKeyArgs(const ConstElementPtr& args) {
+    return (singleListItem(args, "servers"));
+}
+
 ElementPtr
 answerArgs(const string& key, const ElementPtr& value, const uint64_t count) {
     ElementPtr args = Element::createMap();
@@ -399,8 +404,18 @@ parseOption(const ConstElementPtr& args, const uint16_t family) {
 OptionDefinitionPtr
 parseOptionDef(const ConstElementPtr& args, const uint16_t family) {
     ConstElementPtr item = singleListItemAny(args, { "option-defs", "option-def" });
+    ElementPtr parser_item = isc::data::copy(item);
+    if (!parser_item->get("array")) {
+        parser_item->set("array", Element::create(false));
+    }
+    if (!parser_item->get("record-types")) {
+        parser_item->set("record-types", Element::create(string("")));
+    }
+    if (!parser_item->get("encapsulate")) {
+        parser_item->set("encapsulate", Element::create(string("")));
+    }
     OptionDefParser parser(family);
-    return (parser.parse(item));
+    return (parser.parse(parser_item));
 }
 
 ClientClassDefPtr
@@ -622,7 +637,7 @@ process4(const string& cmd, const ConstElementPtr& args, ConstElementPtr& respon
 
     if (cmd == "remote-server4-set") {
         forbidServerTags(args);
-        ConstElementPtr item = args->get("servers") ? singleListItem(args, "servers") : args;
+        ConstElementPtr item = serverKeyArgs(args);
         ServerPtr server = Server::create(ServerTag(mandatoryServerTag(item)),
                                           item->get("description") ?
                                           item->get("description")->stringValue() : "");
@@ -630,7 +645,7 @@ process4(const string& cmd, const ConstElementPtr& args, ConstElementPtr& respon
         response = createAnswer(CONTROL_RESULT_SUCCESS, "server set", serverSetArgs(server));
     } else if (cmd == "remote-server4-get") {
         forbidServerTags(args);
-        auto server = pool->getServer4(backend, ServerTag(mandatoryString(args, "server-tag")));
+        auto server = pool->getServer4(backend, ServerTag(mandatoryString(serverKeyArgs(args), "server-tag")));
         if (!server) {
             response = createAnswer(CONTROL_RESULT_EMPTY, "server not found", answerArgs("servers", Element::createList(), 0));
         } else {
@@ -644,7 +659,7 @@ process4(const string& cmd, const ConstElementPtr& args, ConstElementPtr& respon
         response = createAnswer(CONTROL_RESULT_SUCCESS, "servers returned", answerArgs("servers", list, list->size()));
     } else if (cmd == "remote-server4-del") {
         forbidServerTags(args);
-        uint64_t count = pool->deleteServer4(backend, ServerTag(mandatoryString(args, "server-tag")));
+        uint64_t count = pool->deleteServer4(backend, ServerTag(mandatoryString(serverKeyArgs(args), "server-tag")));
         response = createAnswer(CONTROL_RESULT_SUCCESS, "server deleted", answerArgs("", ElementPtr(), count));
 
     } else if (cmd == "remote-global-parameter4-set") {
@@ -809,9 +824,17 @@ process4(const string& cmd, const ConstElementPtr& args, ConstElementPtr& respon
             if (cmd.find("-global-") != string::npos) {
                 pool->createUpdateOption4(backend, selector, opt);
             } else if (cmd.find("-network-") != string::npos) {
-                pool->createUpdateOption4(backend, selector, mandatoryString(networkKeyArgs(args), "name"), opt);
+                string name = mandatoryString(networkKeyArgs(args), "name");
+                if (!pool->getSharedNetwork4(backend, selector, name)) {
+                    isc_throw(BadValue, "shared network '" << name << "' not found");
+                }
+                pool->createUpdateOption4(backend, selector, name, opt);
             } else if (cmd.find("-subnet-") != string::npos) {
-                pool->createUpdateOption4(backend, selector, mandatorySubnetID(subnetKeyArgs(args)), opt);
+                SubnetID subnet_id = mandatorySubnetID(subnetKeyArgs(args));
+                if (!pool->getSubnet4(backend, selector, subnet_id)) {
+                    isc_throw(BadValue, "subnet id " << subnet_id << " not found");
+                }
+                pool->createUpdateOption4(backend, selector, subnet_id, opt);
             } else {
                 auto range = poolRange(poolKeyArgs(args));
                 pool->createUpdateOption4(backend, selector, range.first, range.second, opt);
@@ -915,7 +938,7 @@ process6(const string& cmd, const ConstElementPtr& args, ConstElementPtr& respon
 
     if (cmd == "remote-server6-set") {
         forbidServerTags(args);
-        ConstElementPtr item = args->get("servers") ? singleListItem(args, "servers") : args;
+        ConstElementPtr item = serverKeyArgs(args);
         ServerPtr server = Server::create(ServerTag(mandatoryServerTag(item)),
                                           item->get("description") ?
                                           item->get("description")->stringValue() : "");
@@ -923,7 +946,7 @@ process6(const string& cmd, const ConstElementPtr& args, ConstElementPtr& respon
         response = createAnswer(CONTROL_RESULT_SUCCESS, "server set", serverSetArgs(server));
     } else if (cmd == "remote-server6-get") {
         forbidServerTags(args);
-        auto server = pool->getServer6(backend, ServerTag(mandatoryString(args, "server-tag")));
+        auto server = pool->getServer6(backend, ServerTag(mandatoryString(serverKeyArgs(args), "server-tag")));
         ElementPtr list = Element::createList();
         if (server) {
             list->add(server->toElement());
@@ -938,7 +961,7 @@ process6(const string& cmd, const ConstElementPtr& args, ConstElementPtr& respon
     } else if (cmd == "remote-server6-del") {
         forbidServerTags(args);
         response = createAnswer(CONTROL_RESULT_SUCCESS, "server deleted",
-                                answerArgs("", ElementPtr(), pool->deleteServer6(backend, ServerTag(mandatoryString(args, "server-tag")))));
+                                answerArgs("", ElementPtr(), pool->deleteServer6(backend, ServerTag(mandatoryString(serverKeyArgs(args), "server-tag")))));
 
     } else if (cmd.find("remote-global-parameter6-") == 0) {
         ServerSelector selector = serverSelector(args, true, false, false);
@@ -1106,9 +1129,17 @@ process6(const string& cmd, const ConstElementPtr& args, ConstElementPtr& respon
             if (cmd.find("-global-") != string::npos) {
                 pool->createUpdateOption6(backend, selector, opt);
             } else if (cmd.find("-network-") != string::npos) {
-                pool->createUpdateOption6(backend, selector, mandatoryString(networkKeyArgs(args), "name"), opt);
+                string name = mandatoryString(networkKeyArgs(args), "name");
+                if (!pool->getSharedNetwork6(backend, selector, name)) {
+                    isc_throw(BadValue, "shared network '" << name << "' not found");
+                }
+                pool->createUpdateOption6(backend, selector, name, opt);
             } else if (cmd.find("-subnet-") != string::npos) {
-                pool->createUpdateOption6(backend, selector, mandatorySubnetID(subnetKeyArgs(args)), opt);
+                SubnetID subnet_id = mandatorySubnetID(subnetKeyArgs(args));
+                if (!pool->getSubnet6(backend, selector, subnet_id)) {
+                    isc_throw(BadValue, "subnet id " << subnet_id << " not found");
+                }
+                pool->createUpdateOption6(backend, selector, subnet_id, opt);
             } else if (cmd.find("-pd-pool-") != string::npos) {
                 auto pd = pdPoolKeyArgs(args);
                 pool->createUpdateOption6(backend, selector, IOAddress(mandatoryString(pd, "prefix")),

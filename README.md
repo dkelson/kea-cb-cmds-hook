@@ -29,6 +29,7 @@ Consortium. Kea is a trademark of Internet Systems Consortium.
   container using either distro `kea-*` packages or ISC `isc-kea-*` packages.
 - `scripts/run-tests.sh` runs the recommended non-DB test set from a configured
   Kea build directory.
+- `scripts/README.md` documents local test and ARM conformance harness setup.
 
 ## Build Against Installed Kea
 
@@ -165,4 +166,67 @@ Useful dependencies for a local Kea test build:
 brew install meson ninja log4cplus googletest bison mysql-client libpq
 export PATH="/opt/homebrew/opt/mysql-client/bin:/opt/homebrew/opt/libpq/bin:/opt/homebrew/opt/bison/bin:$PATH"
 export PKG_CONFIG_PATH="/opt/homebrew/opt/mysql-client/lib/pkgconfig:/opt/homebrew/opt/libpq/lib/pkgconfig:$PKG_CONFIG_PATH"
+```
+
+## ARM Conformance Output
+
+Clean local run of `scripts/arm_conformance.py` against PostgreSQL config
+backend:
+
+```text
+=== DHCPv4 ===
+  PASS server-set                                   result=0    server set
+  PASS server-get  [ARM servers-list form]          result=0    server returned
+  PASS server-get-all                               result=0    servers returned
+  PASS subnet-set [id+relay]                        result=0    subnet set
+  PASS subnet-get-by-id                             result=0    subnet returned
+  PASS subnet-get-by-prefix                         result=0    subnet returned
+  PASS subnet-list                                  result=0    subnets returned
+  PASS global-parameter-set                         result=0    global parameters set
+  PASS global-parameter-get                         result=0    global parameter returned
+  PASS global-parameter-get-all                     result=0    global parameters returned
+  PASS network-set                                  result=0    shared network set
+  PASS network-get                                  result=0    shared network returned
+  PASS network-list                                 result=0    shared networks returned
+  PASS option-def-set [ARM: no array/record-types/encapsulate] result=0    option definition set
+  PASS option-def-get                               result=0    option definition returned
+  PASS option-def-get-all                           result=0    option definitions returned
+  PASS option-global-set                            result=0    option set
+  PASS option-global-get                            result=0    option returned
+  PASS option-global-get-all                        result=0    options returned
+  PASS option-subnet-set                            result=0    option set
+  PASS option-pool-set                              result=0    option set
+  PASS option-network-set                           result=0    option set
+  PASS daemon serves CB subnet                      served=True
+  PASS server-del [ARM servers-list form]           result=0    server deleted
+
+=== DHCPv6 ===
+  PASS server-set                                   result=0    server set
+  PASS server-get  [ARM servers-list form]          result=0    server returned
+  PASS server-get-all                               result=0    servers returned
+  PASS subnet-set [id+relay]                        result=0    subnet set
+  PASS subnet-get-by-id                             result=0    subnet returned
+  PASS subnet-get-by-prefix                         result=0    subnet returned
+  PASS subnet-list                                  result=0    subnets returned
+  PASS global-parameter-set                         result=0    global parameters set
+  PASS global-parameter-get                         result=0    global parameter returned
+  PASS global-parameter-get-all                     result=0    global parameters returned
+  PASS network-set                                  result=0    shared network set
+  PASS network-get                                  result=0    shared network returned
+  PASS network-list                                 result=0    shared networks returned
+  PASS option-def-set [ARM: no array/record-types/encapsulate] result=0    option definition set
+  PASS option-def-get                               result=0    option definition returned
+  PASS option-def-get-all                           result=0    option definitions returned
+  PASS option-global-set                            result=0    option set
+  PASS option-global-get                            result=0    option returned
+  PASS option-global-get-all                        result=0    options returned
+  PASS option-subnet-set                            result=0    option set
+  PASS option-pool-set                              result=0    option set
+  PASS option-network-set                           result=0    option set
+  PASS option-pd-pool-set                           result=0    option set
+  PASS daemon serves CB subnet                      served=True
+  PASS server-del [ARM servers-list form]           result=0    server deleted
+
+=== SUMMARY ===
+checks: 49   passed: 49   DEVIATIONS: 0
 ```
