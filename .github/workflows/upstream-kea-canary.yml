@@ -55,20 +55,6 @@ jobs:
     needs: should-run
     if: needs.should-run.outputs.run_canary == 'true'
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:18-alpine
-        env:
-          POSTGRES_USER: kea
-          POSTGRES_PASSWORD: kea
-          POSTGRES_DB: kea
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U kea -d kea"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
     env:
       KEA_REPOSITORY: ${{ inputs.kea_repository || 'isc-projects/kea' }}
       KEA_REF: ${{ inputs.kea_ref || 'master' }}
@@ -104,8 +90,16 @@ jobs:
             libssl-dev \
             ninja-build \
             pkg-config \
+            postgresql \
             postgresql-client \
             python3-venv
+
+      - name: Start PostgreSQL
+        run: |
+          sudo systemctl start postgresql.service
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -c "CREATE USER kea WITH PASSWORD 'kea';"
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE kea OWNER kea;"
+          pg_isready -h 127.0.0.1 -p 5432 -U kea -d kea
 
       - name: Install Meson
         run: |
