@@ -170,8 +170,8 @@ export PKG_CONFIG_PATH="/opt/homebrew/opt/mysql-client/lib/pkgconfig:/opt/homebr
 
 ## ARM Conformance Output
 
-Clean local run of `scripts/arm_conformance.py` against PostgreSQL config
-backend:
+Clean local run of `scripts/arm_conformance.py` passes against both MySQL and
+PostgreSQL config backends:
 
 ```text
 === DHCPv4 ===
