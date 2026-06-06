@@ -270,16 +270,52 @@ jobs:
       - name: Start MySQL
         if: matrix.backend == 'mysql'
         run: |
-          sudo systemctl start mysql.service || sudo systemctl start mariadb.service
-          sudo mysql --protocol=socket -uroot -e "CREATE DATABASE IF NOT EXISTS kea;"
-          sudo mysql --protocol=socket -uroot -e "CREATE USER IF NOT EXISTS 'kea'@'127.0.0.1' IDENTIFIED BY 'kea';"
-          sudo mysql --protocol=socket -uroot -e "CREATE USER IF NOT EXISTS 'kea'@'localhost' IDENTIFIED BY 'kea';"
-          sudo mysql --protocol=socket -uroot -e "ALTER USER 'kea'@'127.0.0.1' IDENTIFIED BY 'kea';"
-          sudo mysql --protocol=socket -uroot -e "ALTER USER 'kea'@'localhost' IDENTIFIED BY 'kea';"
-          sudo mysql --protocol=socket -uroot -e "GRANT ALL PRIVILEGES ON kea.* TO 'kea'@'127.0.0.1';"
-          sudo mysql --protocol=socket -uroot -e "GRANT ALL PRIVILEGES ON kea.* TO 'kea'@'localhost';"
-          sudo mysql --protocol=socket -uroot -e "FLUSH PRIVILEGES;"
-          mysqladmin --host=127.0.0.1 --port=3306 --user=kea --password=kea ping
+          set -euo pipefail
+          if systemctl list-unit-files mysql.service >/dev/null 2>&1; then
+            mysql_service=mysql.service
+          elif systemctl list-unit-files mariadb.service >/dev/null 2>&1; then
+            mysql_service=mariadb.service
+          else
+            systemctl list-unit-files '*mysql*' '*mariadb*'
+            echo "No MySQL or MariaDB systemd service found" >&2
+            exit 1
+          fi
+
+          sudo systemctl start "$mysql_service"
+          mysql_root_ping() {
+            sudo mysqladmin --protocol=socket -uroot ping >/dev/null 2>&1 ||
+              sudo mysqladmin --protocol=socket -uroot --password=root ping >/dev/null 2>&1 ||
+              mysqladmin --protocol=tcp --host=127.0.0.1 --port=3306 -uroot --password=root ping >/dev/null 2>&1
+          }
+          mysql_root() {
+            sudo mysql --protocol=socket -uroot "$@" 2>/dev/null ||
+              sudo mysql --protocol=socket -uroot --password=root "$@" 2>/dev/null ||
+              mysql --protocol=tcp --host=127.0.0.1 --port=3306 -uroot --password=root "$@"
+          }
+
+          for _ in {1..30}; do
+            if mysql_root_ping; then
+              break
+            fi
+            sleep 1
+          done
+          mysql_root_ping
+
+          mysql_root -e "CREATE DATABASE IF NOT EXISTS kea;"
+          mysql_root -e "DROP USER IF EXISTS 'kea'@'127.0.0.1';"
+          mysql_root -e "DROP USER IF EXISTS 'kea'@'localhost';"
+          mysql_root -e "CREATE USER 'kea'@'127.0.0.1' IDENTIFIED BY 'kea';"
+          mysql_root -e "CREATE USER 'kea'@'localhost' IDENTIFIED BY 'kea';"
+          mysql_root -e "GRANT ALL PRIVILEGES ON kea.* TO 'kea'@'127.0.0.1';"
+          mysql_root -e "GRANT ALL PRIVILEGES ON kea.* TO 'kea'@'localhost';"
+          mysql_root -e "FLUSH PRIVILEGES;"
+          for _ in {1..30}; do
+            if mysqladmin --protocol=tcp --host=127.0.0.1 --port=3306 --user=kea --password=kea ping >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          mysqladmin --protocol=tcp --host=127.0.0.1 --port=3306 --user=kea --password=kea ping
 
       - name: Install Meson
         run: |
