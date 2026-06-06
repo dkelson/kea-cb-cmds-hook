@@ -54,6 +54,9 @@ if [ "${KEA_CB_CMDS_DB_TESTS:-0}" = "1" ]; then
         meson test -C "$BUILD_DIR" dhcp-cb-cmds-db-tests --print-errorlogs
 fi
 
-if [ "${KEA_CB_CMDS_ARM_CONFORMANCE:-0}" = "1" ] || [ -n "${CB_PG_PASSWORD:-}" ]; then
+if [ "${KEA_CB_CMDS_ARM_CONFORMANCE:-0}" = "1" ] || \
+    [ -n "${CB_PG_PASSWORD:-}" ] || \
+    [ -n "${CB_MYSQL_PASSWORD:-}" ] || \
+    [ -n "${CB_MY_PASSWORD:-}" ]; then
     python3 "$(dirname "$0")/arm_conformance.py"
 fi

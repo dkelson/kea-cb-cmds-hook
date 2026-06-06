@@ -36,16 +36,16 @@ On Linux, `--leak-check` enables LeakSanitizer. On macOS, Apple AddressSanitizer
 does not support LeakSanitizer, so the helper runs ASan/UBSan checks with leak
 detection disabled.
 
-If `CB_PG_PASSWORD` is set, or `KEA_CB_CMDS_ARM_CONFORMANCE=1` is set,
-`run-tests.sh` also invokes `arm_conformance.py`.
+If `CB_PG_PASSWORD`, `CB_MYSQL_PASSWORD`, or `KEA_CB_CMDS_ARM_CONFORMANCE=1` is
+set, `run-tests.sh` also invokes `arm_conformance.py`.
 
 ## arm_conformance.py
 
 `arm_conformance.py` is a clean-room ARM conformance harness. It starts isolated
-`kea-dhcp4` and `kea-dhcp6` processes, wires them to a PostgreSQL configuration
-backend, loads `libdhcp_pgsql.so` and `libdhcp_cb_cmds.so`, drives the ARM 3.0
-canonical request shapes, tears down rows it creates, and exits non-zero on any
-deviation.
+`kea-dhcp4` and `kea-dhcp6` processes, wires them to a PostgreSQL or MySQL
+configuration backend, loads the matching database hook and
+`libdhcp_cb_cmds.so`, drives the ARM 3.0 canonical request shapes, tears down
+rows it creates, and exits non-zero on any deviation.
 
 The harness writes daemon PID files, lock files, logs, generated configs, and
 memfile leases to a run directory. By default this is a temporary directory
@@ -54,14 +54,19 @@ under `/tmp` and is removed when the run exits. Set
 
 Required environment:
 
-- `CB_PG_PASSWORD`
+- `CB_PG_PASSWORD` for PostgreSQL, or `CB_DB_TYPE=mysql` and
+  `CB_MYSQL_PASSWORD` for MySQL.
 
 Common overrides:
 
 - `KEA_BIN4`, `KEA_BIN6` — Kea daemon binaries.
-- `KEA_HOOKS_DIR` — directory containing both `libdhcp_pgsql.so` and
-  `libdhcp_cb_cmds.so`.
+- `KEA_HOOKS_DIR` — directory containing `libdhcp_cb_cmds.so` and the selected
+  database hook, `libdhcp_pgsql.so` or `libdhcp_mysql.so`.
+- `CB_DB_TYPE` — `postgresql` or `mysql`; defaults to `postgresql` unless only
+  a MySQL password is set.
 - `CB_PG_HOST`, `CB_PG_PORT`, `CB_PG_NAME`, `CB_PG_USER` — PostgreSQL
+  connection settings.
+- `CB_MYSQL_HOST`, `CB_MYSQL_PORT`, `CB_MYSQL_NAME`, `CB_MYSQL_USER` — MySQL
   connection settings.
 - `CB_PORT4`, `CB_PORT6` — HTTP control socket ports for the temporary daemons.
 - `KEA_CB_CMDS_ARM_CONFORMANCE_RUN_DIR` — run directory to preserve daemon
@@ -71,6 +76,17 @@ Example with an existing PostgreSQL Kea config-backend database:
 
 ```sh
 CB_PG_PASSWORD=secret \
+KEA_BIN4=/path/to/kea-dhcp4 \
+KEA_BIN6=/path/to/kea-dhcp6 \
+KEA_HOOKS_DIR=/path/to/kea/hooks \
+python3 scripts/arm_conformance.py
+```
+
+Example with an existing MySQL Kea config-backend database:
+
+```sh
+CB_DB_TYPE=mysql \
+CB_MYSQL_PASSWORD=secret \
 KEA_BIN4=/path/to/kea-dhcp4 \
 KEA_BIN6=/path/to/kea-dhcp6 \
 KEA_HOOKS_DIR=/path/to/kea/hooks \
@@ -109,6 +125,6 @@ python3 scripts/arm_conformance.py
 podman stop kea-cb-cmds-pg
 ```
 
-`KEA_HOOKS_DIR` must contain both hook libraries. If they are built in different
-directories, create a temporary directory and symlink or copy both `.so` files
-there before running the harness.
+`KEA_HOOKS_DIR` must contain `libdhcp_cb_cmds.so` and the selected database
+hook. If they are built in different directories, create a temporary directory
+and symlink or copy both `.so` files there before running the harness.

@@ -178,7 +178,8 @@ PostgreSQL config backends:
 
 Set `KEA_CB_CMDS_ARM_CONFORMANCE_RUN_DIR=/path/to/results` to preserve daemon
 logs, generated configs, PID files, lock files, and lease files. CI uploads
-these files plus the conformance transcript as ARM conformance artifacts.
+these files plus the conformance transcript as `arm-conformance-results-postgresql`
+and `arm-conformance-results-mysql` artifacts.
 
 ```text
 === DHCPv4 ===

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """ARM conformance harness for kea-cb-cmds-hook (libdhcp_cb_cmds.so).
 
-Spins isolated kea-dhcp4 + kea-dhcp6 instances wired to the PostgreSQL config
-backend (config-control + libdhcp_pgsql.so + libdhcp_cb_cmds.so), drives every
-remote-* command in its ARM 3.0 *canonical* request shape, and prints a
+Spins isolated kea-dhcp4 + kea-dhcp6 instances wired to a PostgreSQL or MySQL
+config backend (config-control + database hook + libdhcp_cb_cmds.so), drives
+every remote-* command in its ARM 3.0 *canonical* request shape, and prints a
 PASS/DEVIATION table comparing the hook's behaviour to the documented Kea ARM
 contract. All config-backend rows it creates are torn down.
 
@@ -12,14 +12,17 @@ Reference: https://kea.readthedocs.io/en/kea-3.0.0/arm/hooks.html
 
 Requirements on the host running this:
   - kea-dhcp4 / kea-dhcp6 binaries
-  - libdhcp_pgsql.so + libdhcp_cb_cmds.so in the hooks dir
-  - a PostgreSQL Kea config-backend DB initialised (`kea-admin db-init pgsql`)
+  - database hook + libdhcp_cb_cmds.so in the hooks dir
+  - a Kea config-backend DB initialised (`kea-admin db-init pgsql|mysql`)
 
 Configuration via environment (sane defaults shown):
   KEA_BIN4=kea-dhcp4            KEA_BIN6=kea-dhcp6
   KEA_HOOKS_DIR=/usr/lib64/kea/hooks
+  CB_DB_TYPE=postgresql         (postgresql or mysql)
   CB_PG_HOST=127.0.0.1  CB_PG_PORT=5432  CB_PG_NAME=kea  CB_PG_USER=kea
-  CB_PG_PASSWORD=...           (required)
+  CB_PG_PASSWORD=...           (required for PostgreSQL)
+  CB_MYSQL_HOST=127.0.0.1  CB_MYSQL_PORT=3306  CB_MYSQL_NAME=kea
+  CB_MYSQL_USER=kea  CB_MYSQL_PASSWORD=...     (required for MySQL)
   CB_PORT4=18010  CB_PORT6=18011
   KEA_CB_CMDS_ARM_CONFORMANCE_RUN_DIR=/path/to/results  (optional; preserved)
 
@@ -39,12 +42,58 @@ import time
 import urllib.request
 
 HOOKS = os.environ.get("KEA_HOOKS_DIR", "/usr/lib64/kea/hooks")
-PG = {"type": "postgresql", "host": os.environ.get("CB_PG_HOST", "127.0.0.1"),
-      "port": int(os.environ.get("CB_PG_PORT", "5432")),
-      "name": os.environ.get("CB_PG_NAME", "kea"),
-      "user": os.environ.get("CB_PG_USER", "kea"),
-      "password": os.environ.get("CB_PG_PASSWORD", "")}
-REMOTE = {"type": "postgresql"}          # the "remote" selector in every command
+BACKENDS = {
+    "postgresql": {
+        "aliases": ("postgresql", "postgres", "pgsql"),
+        "env_prefixes": ("CB_PG",),
+        "default_port": 5432,
+        "hook": "pgsql",
+        "label": "PostgreSQL",
+    },
+    "mysql": {
+        "aliases": ("mysql", "mariadb"),
+        "env_prefixes": ("CB_MYSQL", "CB_MY"),
+        "default_port": 3306,
+        "hook": "mysql",
+        "label": "MySQL",
+    },
+}
+
+
+def normalize_backend(name):
+    for backend, config in BACKENDS.items():
+        if name.lower() in config["aliases"]:
+            return backend
+    raise SystemExit("unsupported CB_DB_TYPE %r; expected postgresql or mysql" % name)
+
+
+def env_value(prefixes, key, default=""):
+    for prefix in prefixes:
+        value = os.environ.get("%s_%s" % (prefix, key))
+        if value:
+            return value
+    return default
+
+
+def select_backend():
+    requested = os.environ.get("CB_DB_TYPE")
+    if requested:
+        return normalize_backend(requested)
+    if env_value(BACKENDS["mysql"]["env_prefixes"], "PASSWORD") and not os.environ.get("CB_PG_PASSWORD"):
+        return "mysql"
+    return "postgresql"
+
+
+BACKEND = select_backend()
+BACKEND_CONFIG = BACKENDS[BACKEND]
+DB = {"type": BACKEND,
+      "host": env_value(BACKEND_CONFIG["env_prefixes"], "HOST", "127.0.0.1"),
+      "port": int(env_value(BACKEND_CONFIG["env_prefixes"], "PORT",
+                            str(BACKEND_CONFIG["default_port"]))),
+      "name": env_value(BACKEND_CONFIG["env_prefixes"], "NAME", "kea"),
+      "user": env_value(BACKEND_CONFIG["env_prefixes"], "USER", "kea"),
+      "password": env_value(BACKEND_CONFIG["env_prefixes"], "PASSWORD", "")}
+REMOTE = {"type": BACKEND}                # the "remote" selector in every command
 AUTH = base64.b64encode(b"c:c").decode()
 results = []                              # (family, label, ok, detail)
 RUN_DIR = None
@@ -59,8 +108,8 @@ def daemon_conf(family, port):
         "lease-database": {"type": "memfile", "persist": False,
                            "name": lease_file},
         "server-tag": "conf%d" % family,
-        "config-control": {"config-databases": [dict(PG)], "config-fetch-wait-time": 3},
-        "hooks-libraries": [{"library": HOOKS + "/libdhcp_pgsql.so"},
+        "config-control": {"config-databases": [dict(DB)], "config-fetch-wait-time": 3},
+        "hooks-libraries": [{"library": "%s/libdhcp_%s.so" % (HOOKS, BACKEND_CONFIG["hook"])},
                             {"library": HOOKS + "/libdhcp_cb_cmds.so"}],
         "control-sockets": [{"socket-type": "http", "socket-address": "127.0.0.1",
                              "socket-port": port, "authentication": {
@@ -247,10 +296,12 @@ def run_family(family, port):
 
 def main():
     global RUN_DIR, PRESERVE_RUN_DIR
-    if not PG["password"]:
-        sys.exit("CB_PG_PASSWORD is required")
+    if not DB["password"]:
+        password_names = ", ".join("%s_PASSWORD" % p for p in BACKEND_CONFIG["env_prefixes"])
+        sys.exit("%s password is required (%s)" % (BACKEND_CONFIG["label"], password_names))
 
     requested_run_dir = os.environ.get("KEA_CB_CMDS_ARM_CONFORMANCE_RUN_DIR")
+    print("ARM conformance backend: %s" % BACKEND)
     if requested_run_dir:
         RUN_DIR = os.path.abspath(requested_run_dir)
         PRESERVE_RUN_DIR = True
