@@ -242,7 +242,6 @@ jobs:
             bison \
             build-essential \
             clang \
-            default-libmysqlclient-dev \
             default-mysql-client \
             default-mysql-server \
             flex \
@@ -251,6 +250,7 @@ jobs:
             libgtest-dev \
             libkrb5-dev \
             liblog4cplus-dev \
+            libmariadb-dev \
             libpq-dev \
             libssl-dev \
             ninja-build \
