@@ -301,6 +301,7 @@ jobs:
           done
           mysql_root_ping
 
+          mysql_root -e "SET GLOBAL log_bin_trust_function_creators = 1;"
           mysql_root -e "CREATE DATABASE IF NOT EXISTS kea;"
           mysql_root -e "DROP USER IF EXISTS 'kea'@'127.0.0.1';"
           mysql_root -e "DROP USER IF EXISTS 'kea'@'localhost';"
