@@ -47,8 +47,10 @@ backend, loads `libdhcp_pgsql.so` and `libdhcp_cb_cmds.so`, drives the ARM 3.0
 canonical request shapes, tears down rows it creates, and exits non-zero on any
 deviation.
 
-The harness keeps daemon PID files, lock files, logs, generated configs, and
-memfile leases in a temporary directory under `/tmp`.
+The harness writes daemon PID files, lock files, logs, generated configs, and
+memfile leases to a run directory. By default this is a temporary directory
+under `/tmp` and is removed when the run exits. Set
+`KEA_CB_CMDS_ARM_CONFORMANCE_RUN_DIR=/path/to/results` to preserve those files.
 
 Required environment:
 
@@ -62,6 +64,8 @@ Common overrides:
 - `CB_PG_HOST`, `CB_PG_PORT`, `CB_PG_NAME`, `CB_PG_USER` — PostgreSQL
   connection settings.
 - `CB_PORT4`, `CB_PORT6` — HTTP control socket ports for the temporary daemons.
+- `KEA_CB_CMDS_ARM_CONFORMANCE_RUN_DIR` — run directory to preserve daemon
+  logs, generated configs, PID files, lock files, and lease files.
 
 Example with an existing PostgreSQL Kea config-backend database:
 

@@ -172,10 +172,23 @@ jobs:
           KEA_BIN4: ${{ github.workspace }}/kea/build-canary/src/bin/dhcp4/kea-dhcp4
           KEA_BIN6: ${{ github.workspace }}/kea/build-canary/src/bin/dhcp6/kea-dhcp6
           KEA_HOOKS_DIR: ${{ github.workspace }}/kea/build-canary/src/hooks/dhcp/cb_cmds
+          KEA_CB_CMDS_ARM_CONFORMANCE_RUN_DIR: ${{ github.workspace }}/ci-artifacts/conformance/run
         run: |
+          set -euo pipefail
+          mkdir -p ci-artifacts/conformance/run
           ln -s "$PWD/kea/build-canary/src/hooks/dhcp/pgsql/libdhcp_pgsql.so" \
             "$PWD/kea/build-canary/src/hooks/dhcp/cb_cmds/libdhcp_pgsql.so"
-          python3 hook/scripts/arm_conformance.py
+          python3 -u hook/scripts/arm_conformance.py 2>&1 \
+            | tee ci-artifacts/conformance/arm-conformance.log
+
+      - name: Upload ARM conformance results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: upstream-arm-conformance-results
+          path: ci-artifacts/conformance/
+          if-no-files-found: warn
+          retention-days: 30
 
   report-failure:
     needs:

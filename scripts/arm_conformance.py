@@ -21,6 +21,7 @@ Configuration via environment (sane defaults shown):
   CB_PG_HOST=127.0.0.1  CB_PG_PORT=5432  CB_PG_NAME=kea  CB_PG_USER=kea
   CB_PG_PASSWORD=...           (required)
   CB_PORT4=18010  CB_PORT6=18011
+  KEA_CB_CMDS_ARM_CONFORMANCE_RUN_DIR=/path/to/results  (optional; preserved)
 
 Run:   CB_PG_PASSWORD=... python3 scripts/arm_conformance.py
 Exit:  0 if fully conformant, 1 if any DEVIATION is found.
@@ -47,6 +48,7 @@ REMOTE = {"type": "postgresql"}          # the "remote" selector in every comman
 AUTH = base64.b64encode(b"c:c").decode()
 results = []                              # (family, label, ok, detail)
 RUN_DIR = None
+PRESERVE_RUN_DIR = False
 
 
 def daemon_conf(family, port):
@@ -111,7 +113,8 @@ class Daemon:
         except Exception:
             self.p.kill()
         self.log.close()
-        os.unlink(self.path)
+        if not PRESERVE_RUN_DIR:
+            os.unlink(self.path)
 
     def call(self, cmd, args):
         body = json.dumps({"command": cmd, "arguments": args}).encode()
@@ -243,13 +246,25 @@ def run_family(family, port):
 
 
 def main():
-    global RUN_DIR
+    global RUN_DIR, PRESERVE_RUN_DIR
     if not PG["password"]:
         sys.exit("CB_PG_PASSWORD is required")
-    with tempfile.TemporaryDirectory(prefix="armconf-", dir="/tmp") as run_dir:
-        RUN_DIR = run_dir
+
+    requested_run_dir = os.environ.get("KEA_CB_CMDS_ARM_CONFORMANCE_RUN_DIR")
+    if requested_run_dir:
+        RUN_DIR = os.path.abspath(requested_run_dir)
+        PRESERVE_RUN_DIR = True
+        os.makedirs(RUN_DIR, exist_ok=True)
+        print("ARM conformance run directory: %s" % RUN_DIR)
         run_family(4, int(os.environ.get("CB_PORT4", "18010")))
         run_family(6, int(os.environ.get("CB_PORT6", "18011")))
+    else:
+        with tempfile.TemporaryDirectory(prefix="armconf-", dir="/tmp") as run_dir:
+            RUN_DIR = run_dir
+            print("ARM conformance run directory: %s" % RUN_DIR)
+            run_family(4, int(os.environ.get("CB_PORT4", "18010")))
+            run_family(6, int(os.environ.get("CB_PORT6", "18011")))
+
     devs = [r for r in results if not r[2]]
     print("\n=== SUMMARY ===")
     print("checks: %d   passed: %d   DEVIATIONS: %d"

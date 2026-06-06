@@ -158,6 +158,9 @@ finding fails the run, and scopes it to the cb_cmds test binaries (not the full
 Kea suite). macOS lacks LeakSanitizer support, so use a Linux build for real
 leak checks.
 
+CI uploads sanitizer command output and Meson logs as the `sanitizer-results`
+artifact.
+
 ## macOS/Homebrew Notes
 
 Useful dependencies for a local Kea test build:
@@ -172,6 +175,10 @@ export PKG_CONFIG_PATH="/opt/homebrew/opt/mysql-client/lib/pkgconfig:/opt/homebr
 
 Clean local run of `scripts/arm_conformance.py` passes against both MySQL and
 PostgreSQL config backends:
+
+Set `KEA_CB_CMDS_ARM_CONFORMANCE_RUN_DIR=/path/to/results` to preserve daemon
+logs, generated configs, PID files, lock files, and lease files. CI uploads
+these files plus the conformance transcript as ARM conformance artifacts.
 
 ```text
 === DHCPv4 ===
