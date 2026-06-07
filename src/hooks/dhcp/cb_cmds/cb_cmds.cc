@@ -1338,6 +1338,29 @@ findCommandSpec(const string& cmd) {
     return (&(*found));
 }
 
+bool
+endsWith(const string& value, const string& suffix) {
+    return ((value.size() >= suffix.size()) &&
+            (value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0));
+}
+
+bool
+isMutatingCommand(const string& cmd) {
+    static const vector<string> suffixes = {
+        "-set",
+        "-del",
+        "-del-by-id",
+        "-del-by-prefix"
+    };
+
+    for (auto const& suffix : suffixes) {
+        if (endsWith(cmd, suffix)) {
+            return (true);
+        }
+    }
+    return (false);
+}
+
 } // end of anonymous namespace
 
 vector<string>
@@ -1364,7 +1387,7 @@ CbCmds::handleCommand(CalloutHandle& handle) const {
         if (!spec) {
             isc_throw(NotImplemented, "unsupported command " << cmd);
         }
-        if (cmd.find("-set") != string::npos || cmd.find("-del") != string::npos) {
+        if (isMutatingCommand(cmd)) {
             isc::util::MultiThreadingCriticalSection cs;
             spec->processor_(cmd, args, response);
         } else {

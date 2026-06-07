@@ -21,6 +21,7 @@
 #include <hooks/callout_handle.h>
 #include <hooks/hooks_manager.h>
 #include <hooks/server_hooks.h>
+#include <util/multi_threading_mgr.h>
 #include <gtest/gtest.h>
 
 #include <set>
@@ -64,6 +65,7 @@ commandJson(const string& command, const string& args = "") {
 class CbCmdsTest : public ::testing::Test {
 public:
     void SetUp() override {
+        isc::util::MultiThreadingMgr::instance().apply(false, 0, 0);
         CfgMgr::instance().clear();
         CfgMgr::instance().setFamily(AF_INET);
         CommandMgr::instance();
@@ -84,6 +86,7 @@ public:
     }
 
     void TearDown() override {
+        isc::util::MultiThreadingMgr::instance().apply(false, 0, 0);
         ConfigBackendDHCPv4Mgr::instance().delAllBackends();
         ConfigBackendDHCPv6Mgr::instance().delAllBackends();
         CfgMgr::instance().clear();
@@ -166,6 +169,54 @@ private:
 
 TEST_F(CbCmdsTest, unsupportedCommandReturnsError) {
     expectError(runJson("{ \"command\": \"remote-unknown4\" }"));
+}
+
+TEST_F(CbCmdsTest, mutatingCommandsEnterCriticalSection) {
+    auto& mt_mgr = isc::util::MultiThreadingMgr::instance();
+    int entries = 0;
+    int exits = 0;
+
+    mt_mgr.addCriticalSectionCallbacks("cb-cmds-test",
+        []() {},
+        [&entries, &mt_mgr]() {
+            ++entries;
+            EXPECT_TRUE(mt_mgr.isInCriticalSection());
+        },
+        [&exits, &mt_mgr]() {
+            ++exits;
+            EXPECT_FALSE(mt_mgr.isInCriticalSection());
+        });
+    mt_mgr.setMode(true);
+
+    expectSuccess(run("remote-server4-set", withRemote("\"servers\": [ { "
+        "\"server-tag\": \"alpha\", \"description\": \"a\" } ]")));
+
+    EXPECT_EQ(1, entries);
+    EXPECT_EQ(1, exits);
+    EXPECT_FALSE(mt_mgr.isInCriticalSection());
+}
+
+TEST_F(CbCmdsTest, readOnlyCommandsDoNotEnterCriticalSection) {
+    auto& mt_mgr = isc::util::MultiThreadingMgr::instance();
+    int entries = 0;
+    int exits = 0;
+
+    mt_mgr.addCriticalSectionCallbacks("cb-cmds-test",
+        []() {},
+        [&entries]() {
+            ++entries;
+        },
+        [&exits]() {
+            ++exits;
+        });
+    mt_mgr.setMode(true);
+
+    expectEmpty(run("remote-server4-get", withRemote("\"servers\": [ { "
+        "\"server-tag\": \"missing\" } ]")));
+
+    EXPECT_EQ(0, entries);
+    EXPECT_EQ(0, exits);
+    EXPECT_FALSE(mt_mgr.isInCriticalSection());
 }
 
 TEST_F(CbCmdsTest, apiDescriptorsAreAcceptedByHandler) {
