@@ -3,7 +3,7 @@
 
 Name:           %{cb_cmds_package_name}
 Version:        %{cb_cmds_version}
-Release:        1%{?cb_cmds_release_suffix}%{?dist}
+Release:        2%{?cb_cmds_release_suffix}%{?dist}
 Summary:        Configuration Backend Commands hook for Kea
 
 License:        MPL-2.0
@@ -56,6 +56,9 @@ test -f %{buildroot}%{_libdir}/kea/hooks/libdhcp_cb_cmds.so
 %{_libdir}/kea/hooks/libdhcp_cb_cmds.so
 
 %changelog
+* Thu Oct 08 2026 Dax Kelson <daxkelson@gmail.com> - 0.3.0-2
+- Rebuild against Kea 3.0.4 (libkea-* soname bumps).
+
 * Sun Jun 07 2026 Dax Kelson <daxkelson@gmail.com> - 0.3.0-1
 - Harden cb_cmds multi-threading critical-section coverage.
 
